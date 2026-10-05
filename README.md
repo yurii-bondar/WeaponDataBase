@@ -9,8 +9,8 @@ so no external libraries are needed — only a C compiler.
 ## Features
 
 - Browse weapon categories and their items with prices
-- Create new categories
-- Add new items to a category, edit name and price of existing ones
+- Create and delete categories
+- Add new items to a category, edit name and price of existing ones, delete items
 - Basket: add items, remove items, clear the basket, see the total amount
 
 ## Build
@@ -68,6 +68,7 @@ Every command is typed and confirmed with **Enter**. Empty input cancels the cur
 | `1`…`N` | Open a category                        |
 | `B`     | Open the basket                        |
 | `N`     | Create a new category                  |
+| `D`     | Delete a category with all its items   |
 | `0`     | Exit                                   |
 
 **Category screen**
@@ -77,6 +78,7 @@ Every command is typed and confirmed with **Enter**. Empty input cancels the cur
 | `1`   | Add an item to the basket (by item ID)                  |
 | `2`   | Create a new item (name + price)                        |
 | `3`   | Edit an item (Enter keeps the current name / price)     |
+| `4`   | Delete an item                                          |
 | `0`   | Back                                                    |
 
 **Basket**
@@ -96,6 +98,8 @@ Basket     (ID, ItemID -> Items)           -- one row per item in the basket
 ```
 
 The basket stores links to items, so editing an item's price changes the basket total too.
+Deleting an item or a category asks for confirmation (`y`) and also removes those items
+from the basket; everything is done in one transaction.
 
 The schema version is kept in `PRAGMA user_version`. A database in the old format
 (one table per category: `Throwing_weapon`, `Sights`, …) is converted automatically,
@@ -110,7 +114,7 @@ contents are preserved.
 | `db.c`, `db.h`            | Opening the database, schema creation and migration        |
 | `menu.c`, `menu.h`        | Console UI: screens and user input handling                |
 | `tables.c`, `tables.h`    | Reading and printing categories, items and the basket      |
-| `crud.c`, `crud.h`        | Create / update operations for categories, items, basket   |
+| `crud.c`, `crud.h`        | Create / update / delete for categories, items, basket     |
 | `platform.c`, `platform.h`| Cross-platform screen clearing and line input              |
 | `sqlite3.c`, `sqlite3.h`  | Bundled SQLite amalgamation                                |
 | `Weapon.db`               | Sample database                                            |
