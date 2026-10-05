@@ -1,0 +1,11 @@
+# Build output
+*.o
+*.obj
+weapondb
+weapondb.exe
+build/
+
+# IDE
+.idea/
+.vscode/
+*.pro.user
