@@ -1,399 +1,139 @@
-﻿#include <stdio.h>
-#include <conio.h>
-#include <stdlib.h>
-#include <sqlite3.h>
+#include <stdio.h>
 
-#include "tables.h"
+#include "crud.h"
 
-void TITLE()
+/* Finishes a write statement. Returns number of changed rows or -1. */
+static int finish(sqlite3 *db, sqlite3_stmt *stmt)
 {
-    printf("                                                         ----------------------------------\n");
-    printf("                                                            DataBase  (+) Shot & Hit (+)  \n");
-    printf("                                                         ----------------------------------\n");
+    int rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+    return rc == SQLITE_DONE ? sqlite3_changes(db) : -1;
 }
 
-void MAIN_MENU()
+int create_category(sqlite3 *db, const char *name)
 {
-    TITLE();
-    printf( " --------------------------\n");
-    printf( "  <ID>    < MAIN MENU >\n");
-    printf( " --------------------------\n\n");
-    printf( "   1 --> Throwing  weapon\n") ;
-    printf( "   2 --> Pneumatic weapon\n") ;
-    printf( "   3 --> Traumatic weapon\n") ;
-    printf( "   4 --> Hunting   weapon\n") ;
-    printf( "   5 --> Military  weapon\n") ;
-    printf( "   6 --> Arrows & Bullets\n");
-    printf( "   7 --> Sights\n\n");
-    printf( " --------------------------\n");
-    printf( "   8 --> GO  to BASKET \n");
-    printf( " --------------------------\n");
+    sqlite3_stmt *stmt;
 
- }
+    if (sqlite3_prepare_v2(db, "INSERT INTO Categories (Name) VALUES (?)",
+                           -1, &stmt, NULL) != SQLITE_OK)
+        return -1;
 
-void BASKET_MENU()
-{
-    TITLE();
-    printf( " -------------------------------------\n");
-    printf( "  <ID>        < BASKET MENU >\n");
-    printf( " -------------------------------------\n\n");
-    printf( "   1 --> VIEW / DELETE\n");
-    printf( "   2 --> CLEAR BASKET\n");
-    printf( "   3 --> TOTAL AMOUNT\n");
-    printf( " -------------------------------------\n");
-    printf( "   4 --> BACK\n");
-    printf( " -------------------------------------\n");
-
+    sqlite3_bind_text(stmt, 1, name, -1, SQLITE_TRANSIENT);
+    if (finish(db, stmt) < 0)
+        return -1;
+    return (int)sqlite3_last_insert_rowid(db);
 }
 
-int  CALLBACK(void* data, int argc, char **argv, char **azColName)
+int create_item(sqlite3 *db, int category_id, const char *name, int price)
 {
-    //fprintf(stderr, "%s: ", (const char*)data);
+    sqlite3_stmt *stmt;
 
-    for(int i = 0; i<argc; i++)
-      {
-        printf("%s ", argv[i] );
-        //printf("%s = %s\n", azColName[i], argv[i] ? argv[i] : "NULL");
-      }
+    if (sqlite3_prepare_v2(db,
+            "INSERT INTO Items (CategoryID, Name, Price) VALUES (?, ?, ?)",
+            -1, &stmt, NULL) != SQLITE_OK)
+        return -1;
 
-   printf("\n");
-
-   return 0;
+    sqlite3_bind_int(stmt, 1, category_id);
+    sqlite3_bind_text(stmt, 2, name, -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int(stmt, 3, price);
+    if (finish(db, stmt) < 0)
+        return -1;
+    return (int)sqlite3_last_insert_rowid(db);
 }
 
-int  SUMM_BASKET (sqlite3 *db, int rc,  char* sql)
+int get_item(sqlite3 *db, int category_id, int id,
+             char *name, size_t name_size, int *price)
 {
-    char *zErrMsg;
-    rc = sqlite3_open("Weapon.db", &db);
-    printf("\n<ID>                  < BASKET >                  <PRICE>\n");
-    printf("----------------------------------------------------------\n");
-    printf("\n    T O T A L   A M O U N T   > > > > > > > > > >  ");
-    printf("$ ");
-    sql =  "SELECT sum(Price) FROM Basket";
-    rc = sqlite3_exec(db, sql, CALLBACK, NULL, &zErrMsg);
-    return  0;
-}
-
-int  INSERT(sqlite3 *db,int rc)
-{
-    char *zErrMsg = NULL;
-    char table [7][255]  = { "Throwing_weapon", "Pneumatic_weapon", "Traumatic_weapon", "Hunting_weapon",
-                             "Military_weapon", "Ammunition", "Sights" };
-    int index;
-    printf( "\n    <PRESS ANY LETTER TO RETURN>\n");
-    printf("\n    ID table  for ADD --> ");
-    scanf("%d",&index);
-
-    char sql1[50];
-    printf("    ID weapon for ADD --> ");
-    int ID;
-    scanf("%d",&ID);
-
-    sprintf(sql1,"INSERT INTO Basket SELECT * FROM %s  WHERE ID='%d'", table[index-1], ID);
-
-    fflush(stdin);
-    rc = sqlite3_exec(db, sql1, NULL, CALLBACK, &zErrMsg);
-
-    if( rc != SQLITE_OK )
-    {
-       fprintf(stderr, "SQL error: %s\n", zErrMsg);
-       sqlite3_free(zErrMsg);
-    }
-
-    return 0;
-
-    //     sql ="INSERT INTO Basket SELECT * FROM Sights WHERE ID=%d"
-}
-
-int  DELETE(sqlite3 *db,int rc,  char* sql)
-{
-    char *zErrMsg = NULL;
-    BASKET(db, sql, rc);
-    printf( "\n    <PRESS ANY LETTER TO RETURN>\n");
-    printf( "\n    ID weapon for DELETE --> ");
-    char sql1[50];
-    int ID;
-
-    scanf("%d",&ID);
-    fflush(stdin);
-    sprintf(sql1,"DELETE FROM Basket where ID=%i;",ID);
-    rc = sqlite3_exec(db, sql1, CALLBACK, NULL, &zErrMsg);
-
-    if( rc != SQLITE_OK )
-    {
-       fprintf(stderr, "SQL error: %s\n", zErrMsg);
-       sqlite3_free(zErrMsg);
-    }
-
-    return 0;
-
-    // sql = "DELETE FROM Basket where ID=%d";
-
-}
-
-int  MAIN_OPERATION(char* sql)
-{
-    sqlite3 *db;
+    sqlite3_stmt *stmt;
     int rc;
-    char    *zErrMsg;
 
-    const char* data = "Callback function called";
+    if (sqlite3_prepare_v2(db,
+            "SELECT Name, Price FROM Items WHERE ID = ? AND CategoryID = ?",
+            -1, &stmt, NULL) != SQLITE_OK)
+        return -1;
 
-    rc = sqlite3_open("Weapon.db", &db);
+    sqlite3_bind_int(stmt, 1, id);
+    sqlite3_bind_int(stmt, 2, category_id);
 
-        if( rc )
-        {
-             fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(db));
-        } else
-              {
-                // fprintf(stderr, "Opened database successfully\n\n");
-              }
+    rc = sqlite3_step(stmt);
+    if (rc == SQLITE_ROW) {
+        const unsigned char *text = sqlite3_column_text(stmt, 0);
+        snprintf(name, name_size, "%s", text ? (const char *)text : "");
+        *price = sqlite3_column_int(stmt, 1);
+    }
+    sqlite3_finalize(stmt);
 
-        int weapon, basket;
-        int h ;
-        system("cls");
-        MAIN_MENU();
-
-        do {
-             weapon = getch();
-           } while(weapon< '1' || weapon > '8');
-
-            switch (weapon)
-                   {
-
-                      case '1': do{
-                                   system("cls");
-                                   TITLE();
-                                   THROWING (db, sql, rc);
-                                   INSERT(db, rc);
-                                   printf("\n\n    C --> Continue\n    E --> Exit");
-
-                                   do {
-                                        h=getch();
-                                      } while(h!='c' && h!='C' && h!='e' && h!='E');
-                                        system("cls");
-                                        TITLE();
-                                        THROWING(db, rc, sql);
-                                      } while(h == 'c' || h == 'C');
-                                        break;
-                     case '2': do{
-                                   system("cls");
-                                   TITLE();
-                                   PNEUMATIC(db, sql,rc);
-                                   INSERT(db, rc);
-                                   printf("\n\n    C --> Continue\n    E --> Exit");
-                                   do {
-                                        h=getch();
-                                      } while(h!='c' && h!='C' && h!='e' && h!='E');
-                                        system("cls");
-                                        TITLE();
-                                        PNEUMATIC(db, rc, sql);
-                                      } while(h == 'c' || h == 'C');
-                               break;
-
-                     case '3': do{
-                                   system("cls");
-                                   TITLE();
-                                   TRAUMATIC (db, sql,rc);
-                                   INSERT(db, rc);
-                                   printf("\n\n    C --> Continue\n    E --> Exit");
-                                   do {
-                                        h=getch();
-                                      } while(h!='c' && h!='C' && h!='e' && h!='E');
-                                        system("cls");
-                                        TITLE();
-                                        TRAUMATIC(db, rc, sql);
-                                      } while(h == 'c' || h == 'C');
-                               break;
-
-                     case '4':  do{
-                                   system("cls");
-                                   TITLE();
-                                   HUNTING (db, sql,rc);
-                                   INSERT(db, rc);
-                                   printf("\n\n    C --> Continue\n    E --> Exit");
-                                   do {
-                                        h=getch();
-                                      } while(h!='c' && h!='C' && h!='e' && h!='E');
-                                        system("cls");
-                                        TITLE();
-                                        HUNTING(db, rc, sql);
-                                       } while(h == 'c' || h == 'C');
-                                        break;
-                     case '5': do{
-                                   system("cls");
-                                   TITLE();
-                                   MILITARY (db, sql,rc);
-                                   INSERT(db, rc);
-                                   printf("\n\n    C --> Continue\n    E --> Exit");
-                                   do {
-                                        h=getch();
-                                      } while(h!='c' && h!='C' && h!='e' && h!='E');
-                                        system("cls");
-                                        TITLE();
-                                        MILITARY(db, rc, sql);
-                                      } while(h == 'c' || h == 'C');
-                                        break;
-                     case '6': do{
-                                   system("cls");
-                                   TITLE();
-                                   AMMUNITION (db, sql,rc);
-                                   INSERT(db, rc);
-                                   printf("\n\n    C --> Continue\n    E --> Exit");
-                                   do {
-                                        h=getch();
-                                      } while(h!='c' && h!='C' && h!='e' && h!='E');
-                                        system("cls");
-                                        TITLE();
-                                        AMMUNITION(db, rc, sql);
-                                      } while(h == 'c' || h == 'C');
-                                        break;
-                     case '7': do{
-                                   system("cls");
-                                   TITLE();
-                                   SIGHTS(db, sql,rc);
-                                   INSERT(db, rc);
-                                   printf("\n\n    C --> Continue\n    E --> Exit");
-                                   do {
-                                        h=getch();
-                                      } while(h!='c' && h!='C' && h!='e' && h!='E');
-                                        system("cls");
-                                        TITLE();
-                                        SIGHTS(db, rc, sql);
-                                      } while(h == 'c' || h == 'C');
-                                        break;
-
-                     case '8':  do{system("cls");
-                                BASKET_MENU();
-
-                                 do{
-                                     basket = getch();
-                                   } while('4' < basket || basket < '1');
-
-                             switch (basket)
-                                    {
-                                        case '1': do{
-                                                      system("cls");
-                                                      TITLE();
-                                                      SUMM_BASKET(db, rc, sql);
-                                                      DELETE(db, rc, sql);
-                                                      printf("\n\n   C --> Continue\n   E --> Exit");
-                                                     do {
-                                                          h=getch();
-                                                        } while(h!='c' && h!='C' && h!='e' && h!='E');
-                                                          system("cls");
-                                                          TITLE();
-                                                          SUMM_BASKET(db, rc, sql);
-                                                          BASKET(db, rc, sql);
-                                                          if (h=='e' || h=='E')  {break;}
-                                                       } while(h == 'c' || h == 'C');
-
-                                                      break;
-
-                                       case '2':  system("cls");
-                                                  TITLE();
-                                                  sql = "DELETE from Basket";
-                                                  printf("   --> Basket is cleared\n");
-                                                  break;
-
-                                      case '3':   system("cls");
-                                                  TITLE();
-                                                  SUMM_BASKET (db, rc, sql);
-                                                  break;
-
-                                       case '4':  system("cls");
-                                                  BASKET_MENU();
-                                                  break;
-                                    }
-                                    printf("\n\n   B --> Basket menu\n   E --> Exit");
-                                     do {h=getch();
-                                      } while(h!='b' && h!='B' && h!='e' && h!='E');
-                                              system("cls");
-                                              BASKET_MENU();
-                                               if (h=='e' || h=='E')  {break;}
-                                                   if (h=='b' || h=='B')  {system("cls");  BASKET_MENU();}
-                                                      } while(h == 'b' || h == 'B');
-
-                                                       break;
-
-                       }
-
-        rc = sqlite3_exec(db, sql, CALLBACK, NULL, &zErrMsg);
-
-        if( rc != SQLITE_OK )
-        {
-          fprintf(stderr, "SQL error: %s\n", zErrMsg);
-          sqlite3_free(zErrMsg);
-        } else
-              {
-               //fprintf(stdout, "\nOperation done successfully\n");
-              }
-
-        sqlite3_close(db);
+    if (rc == SQLITE_ROW)
+        return 1;
+    return rc == SQLITE_DONE ? 0 : -1;
 }
 
-void REPEAT()
+int update_item(sqlite3 *db, int id, const char *name, int price)
 {
-    int h;
-    char*sql = NULL;
+    sqlite3_stmt *stmt;
 
-    do{ MAIN_OPERATION(sql);
-         printf("\n\n   M --> Main menu\n   E --> Exit");
-        do {h=getch();
-          } while(h!='m' && h!='M' && h!='e' && h!='E');
-                 if (h=='e' || h=='E')  {break;}
-                       if (h=='m' || h=='M')  {system("cls"); MAIN_MENU();}
-                          } while(h == 'm' || h == 'M');
+    if (sqlite3_prepare_v2(db, "UPDATE Items SET Name = ?, Price = ? WHERE ID = ?",
+                           -1, &stmt, NULL) != SQLITE_OK)
+        return -1;
+
+    sqlite3_bind_text(stmt, 1, name, -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int(stmt, 2, price);
+    sqlite3_bind_int(stmt, 3, id);
+    return finish(db, stmt);
 }
 
+int add_to_basket(sqlite3 *db, int category_id, int id)
+{
+    sqlite3_stmt *stmt;
 
+    if (sqlite3_prepare_v2(db,
+            "INSERT INTO Basket (ItemID) "
+            "SELECT ID FROM Items WHERE ID = ? AND CategoryID = ?",
+            -1, &stmt, NULL) != SQLITE_OK)
+        return -1;
 
+    sqlite3_bind_int(stmt, 1, id);
+    sqlite3_bind_int(stmt, 2, category_id);
+    return finish(db, stmt);
+}
 
+int remove_from_basket(sqlite3 *db, int id)
+{
+    sqlite3_stmt *stmt;
 
+    /* Basket may hold several copies of the same item: delete only the latest one */
+    if (sqlite3_prepare_v2(db,
+            "DELETE FROM Basket WHERE ID = "
+            "(SELECT ID FROM Basket WHERE ItemID = ? ORDER BY ID DESC LIMIT 1)",
+            -1, &stmt, NULL) != SQLITE_OK)
+        return -1;
 
+    sqlite3_bind_int(stmt, 1, id);
+    return finish(db, stmt);
+}
 
+int clear_basket(sqlite3 *db)
+{
+    if (sqlite3_exec(db, "DELETE FROM Basket", NULL, NULL, NULL) != SQLITE_OK)
+        return -1;
+    return sqlite3_changes(db);
+}
 
+int basket_total(sqlite3 *db, long long *total)
+{
+    sqlite3_stmt *stmt;
+    int rc;
 
+    if (sqlite3_prepare_v2(db,
+            "SELECT COALESCE(SUM(i.Price), 0) FROM Basket b "
+            "JOIN Items i ON i.ID = b.ItemID",
+            -1, &stmt, NULL) != SQLITE_OK)
+        return -1;
 
+    rc = sqlite3_step(stmt);
+    if (rc == SQLITE_ROW)
+        *total = sqlite3_column_int64(stmt, 0);
+    sqlite3_finalize(stmt);
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// sprintf(sql,"INSERT INTO CHOISE SELECT * FROM %s WHERE %s.ID= '%d'",table[Case-1],table[Case-1],ID);
-
-// sql = "INSERT INTO nameTable SELECT * FROM nameTable WHERE nameTable.ID= '%d'";
-
-
-
-//        sql = "DELETE from Pneumatic_weapon where ID=2" ;
-//        sql = "SELECT * from Pneumatic_weapon";
-
-//        sql = "INSERT INTO Basket SELECT * FROM Lights WHERE Lights.ID=5"
-
-//        sql = "UPDATE Weapon set Price = 25000 where ID=1";
-//        sql = "SELECT * from Pneumatic_weapon";
-
+    return rc == SQLITE_ROW ? 0 : -1;
+}
