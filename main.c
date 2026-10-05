@@ -1,11 +1,18 @@
-﻿#include "crud.h"
+#include <stddef.h>
 
-int main()
+#include "db.h"
+#include "menu.h"
+
+int main(int argc, char *argv[])
 {
-   int MAIN_OPERATION(char*sql);
-   REPEAT();
+    const char *path = argc > 1 ? argv[1] : "Weapon.db";
+    sqlite3 *db = db_open(path);
 
-   return 0;
+    if (db == NULL)
+        return 1;
+
+    run_menu(db);
+
+    sqlite3_close(db);
+    return 0;
 }
-
-
