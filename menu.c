@@ -43,6 +43,17 @@ static int read_choice(void)
     return tolower((unsigned char)*p);
 }
 
+/* Asks "(y/N)". Returns 1 only for an answer starting with 'y'. */
+static int confirm(void)
+{
+    char line[16];
+
+    printf(" (y/N) --> ");
+    if (!read_line(line, sizeof line))
+        return 0;
+    return tolower((unsigned char)line[strspn(line, " \t")]) == 'y';
+}
+
 /* Reads a line and trims surrounding spaces.
    Returns its length, or -1 at end of input or if it is longer than max_len. */
 static int read_text(char *buf, size_t size, size_t max_len)
@@ -105,6 +116,41 @@ static void new_category(sqlite3 *db, char *status)
         snprintf(status, STATUS_SIZE, "--> Category '%s' already exists", name);
     else
         set_sql_error(db, status);
+}
+
+static void remove_category(sqlite3 *db, const Category *categories, int count, char *status)
+{
+    const Category *category;
+    int number, items;
+
+    printf("\n    <ENTER TO CANCEL>\n");
+    printf("\n    Number of category to DELETE --> ");
+    if (!read_number(&number)) {
+        status[0] = '\0';
+        return;
+    }
+    if (number < 1 || number > count) {
+        snprintf(status, STATUS_SIZE, "--> No category with ID %d", number);
+        return;
+    }
+
+    category = &categories[number - 1];
+    items = count_items(db, category->id);
+    if (items < 0) {
+        set_sql_error(db, status);
+        return;
+    }
+
+    printf("\n    Delete '%s' with %d item(s) (also from the basket)?", category->name, items);
+    if (!confirm()) {
+        snprintf(status, STATUS_SIZE, "--> Deletion cancelled");
+        return;
+    }
+
+    if (delete_category(db, category->id) > 0)
+        snprintf(status, STATUS_SIZE, "--> Category '%s' deleted", category->name);
+    else
+        snprintf(status, STATUS_SIZE, "--> Failed to delete category '%s'", category->name);
 }
 
 static void add_item_to_basket(sqlite3 *db, const Category *category, char *status)
@@ -205,6 +251,39 @@ static void edit_item(sqlite3 *db, const Category *category, char *status)
         set_sql_error(db, status);
 }
 
+static void remove_item(sqlite3 *db, const Category *category, char *status)
+{
+    char name[MAX_ITEM_NAME + 1];
+    int id, price, found;
+
+    printf("\n    <ENTER TO CANCEL>\n");
+    printf("\n    ID weapon for DELETE --> ");
+    if (!read_number(&id)) {
+        status[0] = '\0';
+        return;
+    }
+
+    found = get_item(db, category->id, id, name, sizeof name, &price);
+    if (found <= 0) {
+        if (found == 0)
+            snprintf(status, STATUS_SIZE, "--> ID %d not found in this category", id);
+        else
+            set_sql_error(db, status);
+        return;
+    }
+
+    printf("\n    Delete '%s' (also from the basket)?", name);
+    if (!confirm()) {
+        snprintf(status, STATUS_SIZE, "--> Deletion cancelled");
+        return;
+    }
+
+    if (delete_item(db, category->id, id) > 0)
+        snprintf(status, STATUS_SIZE, "--> '%s' deleted", name);
+    else
+        snprintf(status, STATUS_SIZE, "--> Failed to delete ID %d", id);
+}
+
 static void category_screen(sqlite3 *db, const Category *category)
 {
     char status[STATUS_SIZE] = "";
@@ -219,6 +298,7 @@ static void category_screen(sqlite3 *db, const Category *category)
         printf("   1 --> ADD to basket\n");
         printf("   2 --> NEW item\n");
         printf("   3 --> EDIT item\n");
+        printf("   4 --> DELETE item\n");
         printf("   0 --> BACK\n");
         printf(" -------------------------------------\n");
 
@@ -226,6 +306,7 @@ static void category_screen(sqlite3 *db, const Category *category)
         case '1': add_item_to_basket(db, category, status); break;
         case '2': new_item(db, category, status);           break;
         case '3': edit_item(db, category, status);          break;
+        case '4': remove_item(db, category, status);        break;
         case '0':
         case EOF: return;
         default:  snprintf(status, STATUS_SIZE, "--> Unknown command"); break;
@@ -318,6 +399,7 @@ void run_menu(sqlite3 *db)
         printf("\n --------------------------------------\n");
         printf("   B --> GO  to BASKET\n");
         printf("   N --> NEW category\n");
+        printf("   D --> DELETE category\n");
         printf("   0 --> EXIT\n");
         printf(" --------------------------------------\n");
         show_status(status);
@@ -337,6 +419,7 @@ void run_menu(sqlite3 *db)
             switch (tolower((unsigned char)line[strspn(line, " \t")])) {
             case 'b': status[0] = '\0'; basket_screen(db);       break;
             case 'n': new_category(db, status);                  break;
+            case 'd': remove_category(db, categories, count, status); break;
             case '\0': status[0] = '\0';                         break;
             default:  snprintf(status, STATUS_SIZE, "--> Unknown command"); break;
             }

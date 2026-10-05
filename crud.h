@@ -20,6 +20,17 @@ int get_item(sqlite3 *db, int category_id, int id,
 /* Changes name and price of an item. Returns 1 if updated, 0 if not found. */
 int update_item(sqlite3 *db, int id, const char *name, int price);
 
+/* Deletes item `id` of a category together with its copies in the basket.
+   Returns 1 if deleted, 0 if not found. */
+int delete_item(sqlite3 *db, int category_id, int id);
+
+/* Deletes a category with all its items and their copies in the basket.
+   Returns 1 if deleted, 0 if not found. */
+int delete_category(sqlite3 *db, int category_id);
+
+/* Returns number of items in a category. */
+int count_items(sqlite3 *db, int category_id);
+
 /* Puts item `id` of a category into the basket. Returns 1 if added, 0 if not found. */
 int add_to_basket(sqlite3 *db, int category_id, int id);
 
